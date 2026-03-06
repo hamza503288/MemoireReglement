@@ -14,6 +14,9 @@ function numberToFrench(num: number): string {
 
   if (num === 0) return 'zéro';
 
+  const isNegative = num < 0;
+  num = Math.abs(num);
+
   function convertLessThanThousand(n: number): string {
     if (n === 0) return '';
     if (n < 10) return units[n];
@@ -53,10 +56,14 @@ function numberToFrench(num: number): string {
     result += ' dinars';
   }
 
+  if (isNegative) {
+    result = 'moins ' + result.trim();
+  }
+
   return result.charAt(0).toUpperCase() + result.slice(1);
 }
 
-type Branche = 'Automobile' | 'MRH' | 'MRP' | 'MRE' | 'MRA' | 'Santé' | 'Vie' | 'Incendie';
+type Branche = 'Automobile' | 'MRH' | 'MRP' | 'MRE' | 'MRA' | 'Santé' | 'Vie' | 'Incendie' | 'Ristourne';
 
 interface MemoireLine {
   id: string;
@@ -101,7 +108,7 @@ export default function Home() {
   const [fetching, setFetching] = useState(false);
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
 
-  const branches: Branche[] = ['Automobile', 'MRH', 'MRP', 'MRE', 'MRA', 'Santé', 'Vie', 'Incendie'];
+  const branches: Branche[] = ['Automobile', 'MRH', 'MRP', 'MRE', 'MRA', 'Santé', 'Vie', 'Incendie', 'Ristourne'];
 
   const showToast = (message: string, type: 'success' | 'error') => {
     setToast({ message, type });
@@ -120,13 +127,20 @@ export default function Home() {
       return;
     }
 
+    let finalPrime = parseFloat(primeTTC);
+    if (branche === 'Ristourne') {
+      finalPrime = -Math.abs(finalPrime);
+    } else {
+      finalPrime = Math.abs(finalPrime);
+    }
+
     const newLine: MemoireLine = {
       id: crypto.randomUUID(),
       branche,
       numeroContrat,
       detailsContrat,
       client,
-      primeTTC: parseFloat(primeTTC),
+      primeTTC: finalPrime,
       echeance,
       immatriculation: branche === 'Automobile' ? immatriculation : undefined
     };
@@ -385,7 +399,15 @@ export default function Home() {
                   <select
                     className="input-field cursor-pointer"
                     value={branche}
-                    onChange={(e) => setBranche(e.target.value as Branche)}
+                    onChange={(e) => {
+                      const val = e.target.value as Branche;
+                      setBranche(val);
+                      if (val === 'Ristourne' && primeTTC && parseFloat(primeTTC) > 0) {
+                        setPrimeTTC('-' + primeTTC);
+                      } else if (val !== 'Ristourne' && primeTTC && parseFloat(primeTTC) < 0) {
+                        setPrimeTTC(Math.abs(parseFloat(primeTTC)).toString());
+                      }
+                    }}
                     required
                   >
                     {branches.map(b => <option key={b} value={b}>{b}</option>)}
@@ -432,7 +454,8 @@ export default function Home() {
                   <input
                     type="number"
                     step="0.001"
-                    min="0"
+                    min={branche !== 'Ristourne' ? "0" : undefined}
+                    max={branche === 'Ristourne' ? "0" : undefined}
                     className="input-field"
                     placeholder="0.000"
                     value={primeTTC}
